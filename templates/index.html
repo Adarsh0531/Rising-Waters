@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102d35">
+  <title>FloodWatch | Flood Risk Estimator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">F</span> FloodWatch</a>
+    <span class="topbar-label">DECISION SUPPORT · MODEL DEMO</span>
+  </header>
+
+  <main class="page">
+    <section class="intro">
+      <p class="eyebrow">WEATHER-BASED RISK ESTIMATION</p>
+      <h1>Prepare before<br>the waters rise.</h1>
+      <p class="intro-copy">Use historical rainfall observations to estimate whether a flood event was recorded, or estimate a flood-probability score from your dataset.</p>
+    </section>
+
+    {% if prediction %}
+    <section class="result result-{{ prediction.risk|lower }}" aria-live="polite">
+      <div>
+        {% if prediction.kind == "classification" %}
+        <p class="eyebrow">ESTIMATED FLOOD CLASS</p>
+        <h2>{{ prediction.label }}</h2>
+        <p class="risk-label">{{ prediction.risk }}</p>
+        {% else %}
+        <p class="eyebrow">MODEL-ESTIMATED SCORE</p>
+        <h2>{{ "%.1f"|format(prediction.probability * 100) }}<span>%</span></h2>
+        <p class="risk-label">{{ prediction.risk }} risk band</p>
+        {% endif %}
+      </div>
+      {% if prediction.kind == "classification" %}
+      <p class="result-note">{{ "%.1f"|format(prediction.probability * 100) }}% estimated probability of the “{{ prediction.positive_class }}” class. This model is based on historical yearly records, not live measurements.</p>
+      {% else %}
+      <p class="result-note">Use this estimate alongside local observations and official guidance.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {% if ready %}
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">REGIONAL CONDITIONS</p>
+          <h2>Enter indicator values</h2>
+        </div>
+        <span class="model-pill">{{ metadata.model_name }} model</span>
+      </div>
+      <form action="{{ url_for('predict') }}" method="post">
+        <div class="feature-grid">
+          {% for feature in metadata.features %}
+          <label class="field">
+            <span>{{ feature }}</span>
+            {% if metadata.feature_types[feature] == "category" and metadata.feature_choices.get(feature) %}
+            <select name="{{ feature }}" required aria-label="{{ feature }}">
+              {% for choice in metadata.feature_choices[feature] %}
+              <option value="{{ choice }}" {% if values.get(feature, metadata.feature_defaults[feature]) == choice %}selected{% endif %}>{{ choice }}</option>
+              {% endfor %}
+            </select>
+            {% elif metadata.feature_types[feature] == "number" %}
+            <input
+              type="number"
+              name="{{ feature }}"
+              step="any"
+              required
+              value="{{ values.get(feature, metadata.feature_defaults[feature]) }}"
+              aria-label="{{ feature }}"
+            >
+            {% else %}
+            <input type="text" name="{{ feature }}" required value="{{ values.get(feature, metadata.feature_defaults[feature]) }}" aria-label="{{ feature }}">
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+        <button type="submit">Estimate flood risk <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="form-note">Fields start with representative values from the dataset. The model only uses features present in its training CSV.</p>
+    </section>
+
+    <section class="metrics">
+      <div class="metrics-title">
+        <p class="eyebrow">MODEL CHECK</p>
+        <h2>Held-out test results</h2>
+      </div>
+      {% if metadata.task_type == "classification" %}
+      <div class="metric"><span>Accuracy</span><strong>{{ "%.1f"|format(metadata.holdout_metrics.accuracy * 100) }}%</strong></div>
+      <div class="metric"><span>Balanced accuracy</span><strong>{{ "%.1f"|format(metadata.holdout_metrics.balanced_accuracy * 100) }}%</strong></div>
+      <div class="metric"><span>F1 score</span><strong>{{ "%.3f"|format(metadata.holdout_metrics.f1) }}</strong></div>
+      {% else %}
+      <div class="metric"><span>R² score</span><strong>{{ "%.3f"|format(metadata.holdout_metrics.r2) }}</strong></div>
+      <div class="metric"><span>Mean absolute error</span><strong>{{ "%.4f"|format(metadata.holdout_metrics.mae) }}</strong></div>
+      <div class="metric"><span>RMSE</span><strong>{{ "%.4f"|format(metadata.holdout_metrics.rmse) }}</strong></div>
+      {% endif %}
+    </section>
+    <p class="form-note">Evaluation split: {{ metadata.split_strategy }}; {{ metadata.holdout_rows }} held-out rows. Results on this small historical dataset do not guarantee future performance.</p>
+    {% else %}
+    <section class="panel setup-panel">
+      <p class="eyebrow">GET STARTED</p>
+      <h2>Train your first model</h2>
+      <p>Place a labelled CSV in the project's <code>data</code> folder, install requirements, and run the training command in the README.</p>
+      <p>The app supports the supplied Kerala <code>FLOODS</code> class labels as well as the continuous <code>FloodProbability</code> target, comparing Decision Tree, Random Forest, KNN, and XGBoost.</p>
+    </section>
+    {% endif %}
+
+    <aside class="notice">
+      <strong>Not an official warning.</strong> This prototype is not a validated emergency forecasting system. The Kerala dataset contains historical yearly records, not live weather data; predictions must not be used alone for evacuation or resource-allocation decisions.
+    </aside>
+  </main>
+
+  <footer>FLOODWATCH <span>·</span> MACHINE-LEARNING PROTOTYPE</footer>
+</body>
+</html>
